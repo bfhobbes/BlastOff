@@ -5,6 +5,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+#include <StateMachine.h>
+
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels
 
@@ -19,6 +21,7 @@ void testdrawchar();
 void testdrawstyles();
 void testscrolltext();
 
+StateMachine stateMachine();
 
 void setup() {
   Serial.begin(9600);
