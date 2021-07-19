@@ -5,8 +5,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#include <StateMachine.h>
-
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
@@ -20,8 +18,6 @@ void testdrawline();
 void testdrawchar();
 void testdrawstyles();
 void testscrolltext();
-
-StateMachine stateMachine();
 
 void setup() {
   Serial.begin(9600);
@@ -50,9 +46,9 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   digitalWrite(FLASH_PIN, HIGH);
-  delay(500);
+  delay(750);
   digitalWrite(FLASH_PIN, LOW);
-  delay(100);
+  delay(250);
 }
 
 
