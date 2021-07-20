@@ -6,6 +6,7 @@
 #include <Adafruit_SSD1306.h>
 
 #include <fsm.h>
+#include <Bounce2.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -15,20 +16,62 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define FLASH_PIN LED_BUILTIN
+#define ARMING_PIN 5
+#define LAUNCH_PIN 9
+
+enum Events {
+  ARMING_DOWN = 0,
+  ARMING_UP,
+  LAUNCH_DOWN,
+  LAUNCH_UP
+};
 
 void testdrawline();
 void testdrawchar();
 void testdrawstyles();
 void testscrolltext();
 
-State IdleState(nullptr, nullptr, nullptr);
+void on_light_on_enter(void) {
+  digitalWrite(FLASH_PIN, HIGH);
+}
 
-Fsm mainFsm(&IdleState);
+void on_light_off_enter(void) {
+  digitalWrite(FLASH_PIN, LOW);
+}
+
+void on_Launching_enter(void) {
+  digitalWrite(FLASH_PIN, HIGH);
+}
+
+void on_launching_exit(void) {
+  digitalWrite(FLASH_PIN, LOW);
+}
+
+Bounce safetySwitch;
+Bounce launchSwitch;
+
+
+State state_init(nullptr, nullptr, nullptr);
+State state_light_on(on_light_on_enter, nullptr, nullptr);
+State state_light_off(on_light_off_enter, nullptr, nullptr);
+
+State state_launching(on_Launching_enter, nullptr, on_launching_exit);
+State state_post_launch(nullptr, nullptr, nullptr);
+
+Fsm mainFsm(&state_init);
+
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("Hello");
 
   pinMode(FLASH_PIN, OUTPUT);
+  
+  // safetySwitch.attach(ARMING_PIN, INPUT_PULLUP);
+  // safetySwitch.interval(50);
+
+  launchSwitch.attach(LAUNCH_PIN, INPUT_PULLUP);
+  launchSwitch.interval(25);
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -36,25 +79,44 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
+  // mainFsm.add_timed_transition(&state_init, &state_light_on, 500, nullptr);
+  // mainFsm.add_timed_transition(&state_light_on, &state_light_off, 1000, nullptr);
+  // mainFsm.add_timed_transition(&state_light_off, &state_light_on, 2000, nullptr);
+
+  mainFsm.add_transition(&state_init, &state_launching, LAUNCH_DOWN, nullptr);
+  mainFsm.add_timed_transition(&state_launching, &state_post_launch, 1000, nullptr);
+  mainFsm.add_timed_transition(&state_post_launch, &state_init, 5000, nullptr);
+
+  mainFsm.add_transition(&state_light_on, &state_light_off, LAUNCH_UP, nullptr);
+  mainFsm.add_transition(&state_light_off, &state_light_on, LAUNCH_DOWN, nullptr);
 
   // Show initial display buffer contents on the screen --
   // the library initializes this with an Adafruit splash screen.
   
   display.display();
-  delay(2000); // Pause for 2 seconds
+  delay(1000);
+  display.clearDisplay();
+  display.display();
 
-  testdrawline();
-  testdrawchar();
-  testdrawstyles();
-  testscrolltext();
+  // testdrawline();
+  // testdrawchar();
+  // testdrawstyles();
+  // testscrolltext();
 }
 
 void loop() {
+  launchSwitch.update();
+
+  if(launchSwitch.fell()) {
+    mainFsm.trigger(LAUNCH_DOWN);
+  }
+  
+  if(launchSwitch.rose()) {
+    mainFsm.trigger(LAUNCH_UP);
+  }
+  
   // put your main code here, to run repeatedly:
-  digitalWrite(FLASH_PIN, HIGH);
-  delay(750);
-  digitalWrite(FLASH_PIN, LOW);
-  delay(250);
+  mainFsm.run_machine();
 }
 
 
