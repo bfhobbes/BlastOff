@@ -16,20 +16,42 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define FLASH_PIN LED_BUILTIN
-#define ARMING_PIN 5
-#define LAUNCH_PIN 9
+#define ARMING_PIN 7
+#define LAUNCH_PIN 8
+#define RELAY_PIN 9
 
 enum Events {
   ARMING_DOWN = 0,
   ARMING_UP,
   LAUNCH_DOWN,
-  LAUNCH_UP
+  LAUNCH_UP,
+  ENTER_SETTING,
+  ENTER_ARMED
 };
 
 void testdrawline();
 void testdrawchar();
 void testdrawstyles();
 void testscrolltext();
+
+void showText(const arduino::__FlashStringHelper *text) {
+  display.clearDisplay();
+  display.setTextSize(2); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(10, 0);
+  display.println(text);
+  display.display();      // Show initial text
+}
+
+Bounce safetySwitch;
+Bounce launchSwitch;
+
+void on_init_enter(void) {
+  showText(F("init"));
+}
+
+State state_init(on_init_enter, nullptr, nullptr);
+Fsm mainFsm(&state_init);
 
 void on_light_on_enter(void) {
   digitalWrite(FLASH_PIN, HIGH);
@@ -41,34 +63,73 @@ void on_light_off_enter(void) {
 
 void on_Launching_enter(void) {
   digitalWrite(FLASH_PIN, HIGH);
+  digitalWrite(RELAY_PIN, HIGH);
 }
 
 void on_launching_exit(void) {
   digitalWrite(FLASH_PIN, LOW);
+  digitalWrite(RELAY_PIN, LOW);
 }
 
-Bounce safetySwitch;
-Bounce launchSwitch;
+void on_idle_enter(void) {
+  showText(F("idle"));
+}
+
+void on_armed_enter(void) {
+  showText(F("armed"));
+}
+
+void on_postlaunch_enter(void) {
+  showText(F("postlaunch"));
+}
+
+void on_prearm_enter(void) {
+  showText(F("prearmed"));
+}
+
+void on_prearm(void) {
+  if(!launchSwitch.read()) {
+    mainFsm.trigger(ENTER_SETTING);
+  } else {
+    mainFsm.trigger(ENTER_ARMED);
+  }
+}
+
+void on_setting_enter(void) {
+  showText(F("setting"));
+}
+
+void on_settingname_enter(void) {
+  showText(F("name"));
+}
+
+void on_settingvalue_enter(void) {
+  showText(F("value"));
+}
 
 
-State state_init(nullptr, nullptr, nullptr);
-State state_light_on(on_light_on_enter, nullptr, nullptr);
-State state_light_off(on_light_off_enter, nullptr, nullptr);
+State state_idle(on_idle_enter, nullptr, nullptr);
+
+State state_prearmed(on_prearm_enter, on_prearm, nullptr);
+State state_setting(on_setting_enter, nullptr, nullptr);
+State state_settingname(on_settingname_enter, nullptr, nullptr);
+State state_settingvalue(on_settingvalue_enter, nullptr, nullptr);
+
+State state_armed(on_armed_enter, nullptr, nullptr);
 
 State state_launching(on_Launching_enter, nullptr, on_launching_exit);
-State state_post_launch(nullptr, nullptr, nullptr);
+State state_postlaunch(on_postlaunch_enter, nullptr, nullptr);
 
-Fsm mainFsm(&state_init);
 
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("Hello");
 
   pinMode(FLASH_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT);
   
-  // safetySwitch.attach(ARMING_PIN, INPUT_PULLUP);
-  // safetySwitch.interval(50);
+  safetySwitch.attach(ARMING_PIN, INPUT_PULLUP);
+  safetySwitch.interval(25);
 
   launchSwitch.attach(LAUNCH_PIN, INPUT_PULLUP);
   launchSwitch.interval(25);
@@ -79,17 +140,25 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
-  // mainFsm.add_timed_transition(&state_init, &state_light_on, 500, nullptr);
-  // mainFsm.add_timed_transition(&state_light_on, &state_light_off, 1000, nullptr);
-  // mainFsm.add_timed_transition(&state_light_off, &state_light_on, 2000, nullptr);
+  mainFsm.add_timed_transition(&state_init, &state_idle, 50, nullptr);
 
-  mainFsm.add_transition(&state_init, &state_launching, LAUNCH_DOWN, nullptr);
-  mainFsm.add_timed_transition(&state_launching, &state_post_launch, 1000, nullptr);
-  mainFsm.add_timed_transition(&state_post_launch, &state_init, 5000, nullptr);
+  mainFsm.add_transition(&state_idle, &state_prearmed, ARMING_DOWN, nullptr);
 
-  mainFsm.add_transition(&state_light_on, &state_light_off, LAUNCH_UP, nullptr);
-  mainFsm.add_transition(&state_light_off, &state_light_on, LAUNCH_DOWN, nullptr);
+  mainFsm.add_transition(&state_prearmed, &state_setting, ENTER_SETTING, nullptr);
+  mainFsm.add_transition(&state_prearmed, &state_armed, ENTER_ARMED, nullptr);
 
+  mainFsm.add_transition(&state_setting, &state_idle, ARMING_UP, nullptr);
+  mainFsm.add_transition(&state_setting, &state_settingname, LAUNCH_UP, nullptr);
+
+  mainFsm.add_transition(&state_settingname, &state_settingvalue, ARMING_UP, nullptr);
+
+  mainFsm.add_transition(&state_settingvalue, &state_settingname, ARMING_DOWN, nullptr);
+
+  mainFsm.add_transition(&state_armed, &state_launching, LAUNCH_DOWN, nullptr);
+  mainFsm.add_timed_transition(&state_launching, &state_postlaunch, 250, nullptr);
+  mainFsm.add_transition(&state_postlaunch, &state_init, ARMING_UP, nullptr);
+
+  
   // Show initial display buffer contents on the screen --
   // the library initializes this with an Adafruit splash screen.
   
@@ -106,6 +175,7 @@ void setup() {
 
 void loop() {
   launchSwitch.update();
+  safetySwitch.update();
 
   if(launchSwitch.fell()) {
     mainFsm.trigger(LAUNCH_DOWN);
@@ -113,6 +183,14 @@ void loop() {
   
   if(launchSwitch.rose()) {
     mainFsm.trigger(LAUNCH_UP);
+  }
+
+  if(safetySwitch.fell()) {
+    mainFsm.trigger(ARMING_DOWN);
+  }
+
+  if(safetySwitch.rose()) {
+    mainFsm.trigger(ARMING_UP);
   }
   
   // put your main code here, to run repeatedly:
