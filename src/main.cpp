@@ -29,6 +29,29 @@ enum Events {
   ENTER_ARMED
 };
 
+struct SettingInfo {
+  const char *Name;
+  const char *values[5];
+};
+
+static const SettingInfo settings[] = {
+  {
+    "Option1", { "o1_val1", "o1_val2", nullptr }
+  },
+  {
+    "Option2", { "o2_val1", "o2_val2", "o2_val3", nullptr }
+  },
+  {
+    "Option3", { "o3_val1", "o3_val2", "o3_val3", "o3_val4", nullptr }
+  }
+};
+
+int currentSetting = 0;
+int currentValue = 0;
+
+const int NUM_SETTINGS = sizeof(settings)/sizeof(SettingInfo);
+int settingVals[NUM_SETTINGS];
+
 void testdrawline();
 void testdrawchar();
 void testdrawstyles();
@@ -40,6 +63,29 @@ void showText(const arduino::__FlashStringHelper *text) {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(10, 0);
   display.println(text);
+  display.display();      // Show initial text
+}
+
+void showText3(const arduino::__FlashStringHelper *text1, const arduino::__FlashStringHelper *text2, const arduino::__FlashStringHelper *text3) {
+  display.clearDisplay();
+  display.setTextSize(2); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  if(text1) {
+    display.setCursor(10, 0);
+    display.println(text1);
+  }
+  if(text2) {
+    if(text3 == nullptr) {
+      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
+    }
+    display.setCursor(10, 21);
+    display.println(text2);
+  }
+  if(text3) {
+    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
+    display.setCursor(10, 42);
+    display.println(text3);
+  }
   display.display();      // Show initial text
 }
 
@@ -100,17 +146,32 @@ void on_setting_enter(void) {
 }
 
 void on_settingname_enter(void) {
-  showText(F("name"));
+  if(currentSetting >= NUM_SETTINGS) {
+    currentSetting = 0;
+  }
+  showText3(
+    F("Setting"),
+    F(settings[currentSetting].Name),
+    nullptr
+  );
 }
 
 void on_settingvalue_enter(void) {
-  showText(F("value"));
+  if(settings[currentSetting].values[currentValue] == nullptr) {
+    currentValue = 0;
+  }
+  showText3(
+    F("Setting"),
+    F(settings[currentSetting].Name),
+    F(settings[currentSetting].values[currentValue])
+  );
 }
 
 
 State state_idle(on_idle_enter, nullptr, nullptr);
 
 State state_prearmed(on_prearm_enter, on_prearm, nullptr);
+
 State state_setting(on_setting_enter, nullptr, nullptr);
 State state_settingname(on_settingname_enter, nullptr, nullptr);
 State state_settingvalue(on_settingvalue_enter, nullptr, nullptr);
@@ -119,7 +180,6 @@ State state_armed(on_armed_enter, nullptr, nullptr);
 
 State state_launching(on_Launching_enter, nullptr, on_launching_exit);
 State state_postlaunch(on_postlaunch_enter, nullptr, nullptr);
-
 
 
 void setup() {
@@ -151,8 +211,10 @@ void setup() {
   mainFsm.add_transition(&state_setting, &state_settingname, LAUNCH_UP, nullptr);
 
   mainFsm.add_transition(&state_settingname, &state_settingvalue, ARMING_UP, nullptr);
+  mainFsm.add_transition(&state_settingname, &state_settingname, LAUNCH_DOWN, []() { currentSetting++; } ); 
 
   mainFsm.add_transition(&state_settingvalue, &state_settingname, ARMING_DOWN, nullptr);
+  mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, []() { currentValue++; } ); 
 
   mainFsm.add_transition(&state_armed, &state_launching, LAUNCH_DOWN, nullptr);
   mainFsm.add_timed_transition(&state_launching, &state_postlaunch, 250, nullptr);
