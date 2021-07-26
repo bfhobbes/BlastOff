@@ -26,12 +26,20 @@ enum Events {
   LAUNCH_DOWN,
   LAUNCH_UP,
   ENTER_SETTING,
-  ENTER_ARMED
+  ENTER_ARMED, 
+  LAUNCH
 };
 
 struct SettingInfo {
   const char *Name;
   const char *values[5];
+};
+
+enum SettingName {
+  VALVE_TIME,
+  LAUNCH_MODE,
+  COUNTDOWN_TIMER,
+  AUDIO
 };
 
 static const SettingInfo settings[] = {
@@ -43,6 +51,9 @@ static const SettingInfo settings[] = {
   },
   {
     "Option3", { "o3_val1", "o3_val2", "o3_val3", "o3_val4", nullptr }
+  },
+  {
+    "Exit", { nullptr }
   }
 };
 
@@ -62,6 +73,15 @@ void showText(const arduino::__FlashStringHelper *text) {
   display.setTextSize(2); // Draw 2X-scale text
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(10, 0);
+  display.println(text);
+  display.display();      // Show initial text
+}
+
+void showCountdownText(const arduino::__FlashStringHelper *text) {
+  display.clearDisplay();
+  display.setTextSize(3); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(30, 20);
   display.println(text);
   display.display();      // Show initial text
 }
@@ -110,6 +130,7 @@ void on_light_off_enter(void) {
 void on_Launching_enter(void) {
   digitalWrite(FLASH_PIN, HIGH);
   digitalWrite(RELAY_PIN, HIGH);
+  showCountdownText(F("LAUNCH"));
 }
 
 void on_launching_exit(void) {
@@ -167,6 +188,23 @@ void on_settingvalue_enter(void) {
   );
 }
 
+int countdownStart = 0;
+void on_countdown_enter(void) {
+  countdownStart = millis();
+}
+
+void on_countdown_update(void) {
+  int countdown = 10000 + countdownStart - millis();
+  
+  char buff[20];
+  sprintf(buff, "%.2f", (float)countdown / 1000.0f);
+
+  showCountdownText(F(buff));
+  if(countdown <= 0) {
+    mainFsm.trigger(LAUNCH);
+  }
+}
+
 
 State state_idle(on_idle_enter, nullptr, nullptr);
 
@@ -179,6 +217,8 @@ State state_settingvalue(on_settingvalue_enter, nullptr, nullptr);
 State state_armed(on_armed_enter, nullptr, nullptr);
 
 State state_launching(on_Launching_enter, nullptr, on_launching_exit);
+
+State state_countdown(on_countdown_enter, on_countdown_update, nullptr );
 State state_postlaunch(on_postlaunch_enter, nullptr, nullptr);
 
 
@@ -216,9 +256,13 @@ void setup() {
   mainFsm.add_transition(&state_settingvalue, &state_settingname, ARMING_DOWN, nullptr);
   mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, []() { currentValue++; } ); 
 
-  mainFsm.add_transition(&state_armed, &state_launching, LAUNCH_DOWN, nullptr);
-  mainFsm.add_timed_transition(&state_launching, &state_postlaunch, 250, nullptr);
-  mainFsm.add_transition(&state_postlaunch, &state_init, ARMING_UP, nullptr);
+  mainFsm.add_transition(&state_countdown, &state_launching, LAUNCH, nullptr);
+
+  mainFsm.add_transition(&state_armed, &state_countdown, LAUNCH_DOWN, nullptr);
+  mainFsm.add_transition(&state_armed, &state_idle, ARMING_UP, nullptr);
+
+  mainFsm.add_timed_transition(&state_launching, &state_postlaunch, 300, nullptr);
+  mainFsm.add_transition(&state_postlaunch, &state_idle, ARMING_UP, nullptr);
 
   
   // Show initial display buffer contents on the screen --
