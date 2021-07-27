@@ -16,6 +16,7 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define FLASH_PIN LED_BUILTIN
+#define ARMED_LIGHT  10
 #define ARMING_PIN 7
 #define LAUNCH_PIN 8
 #define RELAY_PIN 9
@@ -119,6 +120,28 @@ void on_init_enter(void) {
 State state_init(on_init_enter, nullptr, nullptr);
 Fsm mainFsm(&state_init);
 
+
+enum LightEvents {
+  LIGHT_OFF, 
+  LIGHT_ON,
+  LIGHT_STROBE
+};
+
+State light_off([]() {digitalWrite(ARMED_LIGHT, LOW);}, nullptr, nullptr );
+State light_on([]() {digitalWrite(ARMED_LIGHT, HIGH);}, nullptr, nullptr );
+Fsm lightFsm(&light_off);
+
+int strobeCount = 0;
+State light_strobe_on( 
+  []() {digitalWrite(ARMED_LIGHT, HIGH); --strobeCount; }, 
+  nullptr,
+  nullptr);
+State light_strobe_off( 
+  []() {digitalWrite(ARMED_LIGHT, LOW);}, 
+  []() { if(strobeCount<=0) {lightFsm.trigger(LIGHT_OFF);} }, 
+  nullptr);
+
+
 void on_light_on_enter(void) {
   digitalWrite(FLASH_PIN, HIGH);
 }
@@ -143,7 +166,13 @@ void on_idle_enter(void) {
 }
 
 void on_armed_enter(void) {
+  lightFsm.trigger(LIGHT_ON);
+  
   showText(F("armed"));
+}
+
+void on_armed_exit(void) {
+  lightFsm.trigger(LIGHT_OFF);
 }
 
 void on_postlaunch_enter(void) {
@@ -164,6 +193,10 @@ void on_prearm(void) {
 
 void on_setting_enter(void) {
   showText(F("setting"));
+}
+
+void on_abort_enter(void) {
+  showText(F("ABORT"));
 }
 
 void on_settingname_enter(void) {
@@ -214,11 +247,13 @@ State state_setting(on_setting_enter, nullptr, nullptr);
 State state_settingname(on_settingname_enter, nullptr, nullptr);
 State state_settingvalue(on_settingvalue_enter, nullptr, nullptr);
 
-State state_armed(on_armed_enter, nullptr, nullptr);
+State state_armed(on_armed_enter, nullptr, on_armed_exit);
 
 State state_launching(on_Launching_enter, nullptr, on_launching_exit);
 
 State state_countdown(on_countdown_enter, on_countdown_update, nullptr );
+State state_abort(on_abort_enter, nullptr, nullptr);
+
 State state_postlaunch(on_postlaunch_enter, nullptr, nullptr);
 
 
@@ -227,6 +262,7 @@ void setup() {
 
   pinMode(FLASH_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
+  pinMode(ARMED_LIGHT, OUTPUT);
   
   safetySwitch.attach(ARMING_PIN, INPUT_PULLUP);
   safetySwitch.interval(25);
@@ -239,6 +275,15 @@ void setup() {
     Serial.println(F("SSD1306 allocation failed"));
     for(;;); // Don't proceed, loop forever
   }
+
+  
+  lightFsm.add_transition(&light_off, &light_on, LIGHT_ON, nullptr);
+  lightFsm.add_transition(&light_on, &light_off, LIGHT_OFF, nullptr);
+
+  lightFsm.add_transition(&light_off, &light_strobe_on, LIGHT_STROBE, []() {strobeCount = 3;});
+  lightFsm.add_transition(&light_strobe_off, &light_off, LIGHT_OFF, nullptr);
+  lightFsm.add_timed_transition(&light_strobe_off, &light_strobe_on, 300, nullptr);
+  lightFsm.add_timed_transition(&light_strobe_on, &light_strobe_off, 300, nullptr ) ;
 
   mainFsm.add_timed_transition(&state_init, &state_idle, 50, nullptr);
 
@@ -256,7 +301,11 @@ void setup() {
   mainFsm.add_transition(&state_settingvalue, &state_settingname, ARMING_DOWN, nullptr);
   mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, []() { currentValue++; } ); 
 
+  mainFsm.add_transition(&state_countdown, &state_abort, ARMING_UP, []() { lightFsm.trigger(LIGHT_STROBE);});
   mainFsm.add_transition(&state_countdown, &state_launching, LAUNCH, nullptr);
+
+
+  mainFsm.add_timed_transition(&state_abort, &state_idle, 3000, nullptr);
 
   mainFsm.add_transition(&state_armed, &state_countdown, LAUNCH_DOWN, nullptr);
   mainFsm.add_transition(&state_armed, &state_idle, ARMING_UP, nullptr);
@@ -300,7 +349,9 @@ void loop() {
   }
   
   // put your main code here, to run repeatedly:
+
   mainFsm.run_machine();
+  lightFsm.run_machine();
 }
 
 
