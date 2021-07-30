@@ -16,10 +16,10 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define FLASH_PIN LED_BUILTIN
-#define ARMED_LIGHT  10
-#define ARMING_PIN 7
+#define ARMED_LIGHT  7
+#define ARMING_PIN 9
 #define LAUNCH_PIN 8
-#define RELAY_PIN 9
+#define RELAY_PIN 10
 
 enum Events {
   ARMING_DOWN = 0,
