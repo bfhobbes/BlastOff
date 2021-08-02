@@ -114,7 +114,7 @@ void showText3(const arduino::__FlashStringHelper *text1, const arduino::__Flash
 Bounce safetySwitch;
 Bounce launchSwitch;
 
-void on_init_enter(void) {
+void on_init_enter(void *) {
   showText(F("init"));
 }
 
@@ -128,63 +128,63 @@ enum LightEvents {
   LIGHT_STROBE
 };
 
-State light_off([]() {digitalWrite(ARMED_LIGHT, LOW);}, nullptr, nullptr );
-State light_on([]() {digitalWrite(ARMED_LIGHT, HIGH);}, nullptr, nullptr );
+State light_off([](void *) {digitalWrite(ARMED_LIGHT, LOW);}, nullptr, nullptr );
+State light_on([](void *) {digitalWrite(ARMED_LIGHT, HIGH);}, nullptr, nullptr );
 Fsm lightFsm(&light_off);
 
 int strobeCount = 0;
 State light_strobe_on( 
-  []() {digitalWrite(ARMED_LIGHT, HIGH); --strobeCount; }, 
+  [](void *) {digitalWrite(ARMED_LIGHT, HIGH); --strobeCount; }, 
   nullptr,
   nullptr);
 State light_strobe_off( 
-  []() {digitalWrite(ARMED_LIGHT, LOW);}, 
-  []() { if(strobeCount<=0) {lightFsm.trigger(LIGHT_OFF);} }, 
+  [](void *) {digitalWrite(ARMED_LIGHT, LOW);}, 
+  [](void *) { if(strobeCount<=0) {lightFsm.trigger(LIGHT_OFF);} }, 
   nullptr);
 
 
-void on_light_on_enter(void) {
+void on_light_on_enter(void *) {
   digitalWrite(FLASH_PIN, HIGH);
 }
 
-void on_light_off_enter(void) {
+void on_light_off_enter(void *) {
   digitalWrite(FLASH_PIN, LOW);
 }
 
-void on_Launching_enter(void) {
+void on_Launching_enter(void *) {
   digitalWrite(FLASH_PIN, HIGH);
   digitalWrite(RELAY_PIN, HIGH);
   showCountdownText(F("LAUNCH"));
 }
 
-void on_launching_exit(void) {
+void on_launching_exit(void *) {
   digitalWrite(FLASH_PIN, LOW);
   digitalWrite(RELAY_PIN, LOW);
 }
 
-void on_idle_enter(void) {
+void on_idle_enter(void *) {
   showText(F("idle"));
 }
 
-void on_armed_enter(void) {
+void on_armed_enter(void *) {
   lightFsm.trigger(LIGHT_ON);
   
   showText(F("armed"));
 }
 
-void on_armed_exit(void) {
+void on_armed_exit(void *) {
   lightFsm.trigger(LIGHT_OFF);
 }
 
-void on_postlaunch_enter(void) {
+void on_postlaunch_enter(void *) {
   showText(F("postlaunch"));
 }
 
-void on_prearm_enter(void) {
+void on_prearm_enter(void *) {
   showText(F("prearmed"));
 }
 
-void on_prearm(void) {
+void on_prearm(void *) {
   if(!launchSwitch.read()) {
     mainFsm.trigger(ENTER_SETTING);
   } else {
@@ -192,15 +192,15 @@ void on_prearm(void) {
   }
 }
 
-void on_setting_enter(void) {
+void on_setting_enter(void *) {
   showText(F("setting"));
 }
 
-void on_abort_enter(void) {
+void on_abort_enter(void *) {
   showText(F("ABORT"));
 }
 
-void on_settingname_enter(void) {
+void on_settingname_enter(void *) {
   if(currentSetting >= NUM_SETTINGS) {
     currentSetting = 0;
   }
@@ -211,7 +211,7 @@ void on_settingname_enter(void) {
   );
 }
 
-void on_settingvalue_enter(void) {
+void on_settingvalue_enter(void *) {
   if(settings[currentSetting].values[currentValue] == nullptr) {
     currentValue = 0;
   }
@@ -223,11 +223,11 @@ void on_settingvalue_enter(void) {
 }
 
 int countdownStart = 0;
-void on_countdown_enter(void) {
+void on_countdown_enter(void *) {
   countdownStart = millis();
 }
 
-void on_countdown_update(void) {
+void on_countdown_update(void *) {
   int countdown = 10000 + countdownStart - millis();
   
   char buff[20];
@@ -281,7 +281,7 @@ void setup() {
   lightFsm.add_transition(&light_off, &light_on, LIGHT_ON, nullptr);
   lightFsm.add_transition(&light_on, &light_off, LIGHT_OFF, nullptr);
 
-  lightFsm.add_transition(&light_off, &light_strobe_on, LIGHT_STROBE, []() {strobeCount = 3;});
+  lightFsm.add_transition(&light_off, &light_strobe_on, LIGHT_STROBE, [](void *) {strobeCount = 3;});
   lightFsm.add_transition(&light_strobe_off, &light_off, LIGHT_OFF, nullptr);
   lightFsm.add_timed_transition(&light_strobe_off, &light_strobe_on, 300, nullptr);
   lightFsm.add_timed_transition(&light_strobe_on, &light_strobe_off, 300, nullptr ) ;
@@ -297,12 +297,12 @@ void setup() {
   mainFsm.add_transition(&state_setting, &state_settingname, LAUNCH_UP, nullptr);
 
   mainFsm.add_transition(&state_settingname, &state_settingvalue, ARMING_UP, nullptr);
-  mainFsm.add_transition(&state_settingname, &state_settingname, LAUNCH_DOWN, []() { currentSetting++; } ); 
+  mainFsm.add_transition(&state_settingname, &state_settingname, LAUNCH_DOWN, [](void *) { currentSetting++; } ); 
 
   mainFsm.add_transition(&state_settingvalue, &state_settingname, ARMING_DOWN, nullptr);
-  mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, []() { currentValue++; } ); 
+  mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, [](void *) { currentValue++; } ); 
 
-  mainFsm.add_transition(&state_countdown, &state_abort, ARMING_UP, []() { lightFsm.trigger(LIGHT_STROBE);});
+  mainFsm.add_transition(&state_countdown, &state_abort, ARMING_UP, [](void *) { lightFsm.trigger(LIGHT_STROBE);});
   mainFsm.add_transition(&state_countdown, &state_launching, LAUNCH, nullptr);
 
 

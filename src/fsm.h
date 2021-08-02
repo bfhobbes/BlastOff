@@ -11,10 +11,11 @@
 
 struct State
 {
-  State(void (*on_enter)(), void (*on_state)(), void (*on_exit)());
-  void (*on_enter)();
-  void (*on_state)();
-  void (*on_exit)();
+  State();
+  State(void (*on_enter)(void *), void (*on_state)(void *context), void (*on_exit)(void *context));
+  void (*on_enter)(void *);
+  void (*on_state)(void *);
+  void (*on_exit)(void *);
 };
 
 
@@ -25,15 +26,16 @@ public:
   ~Fsm();
 
   void add_transition(State* state_from, State* state_to, int event,
-                      void (*on_transition)());
+                      void (*on_transition)(void *));
 
   void add_timed_transition(State* state_from, State* state_to,
-                            unsigned long interval, void (*on_transition)());
+                            unsigned long interval, void (*on_transition)(void *));
 
-  void check_timed_transitions();
+  void check_timed_transitions(void *context=nullptr);
 
-  void trigger(int event);
-  void run_machine();
+  void trigger(int event, void *context = nullptr);
+  void queueTrigger(int event);
+  void run_machine(void *context = nullptr);
 
 private:
   struct Transition
@@ -41,9 +43,9 @@ private:
     State* state_from;
     State* state_to;
     int event;
-    void (*on_transition)();
-
+    void (*on_transition)(void *);
   };
+
   struct TimedTransition
   {
     Transition transition;
@@ -52,9 +54,9 @@ private:
   };
 
   static Transition create_transition(State* state_from, State* state_to,
-                                      int event, void (*on_transition)());
+                                      int event, void (*on_transition)(void *context));
 
-  void make_transition(Transition* transition);
+  void make_transition(Transition* transition, void *context);
 
 private:
   State* m_current_state;
@@ -64,6 +66,7 @@ private:
   TimedTransition* m_timed_transitions;
   int m_num_timed_transitions;
   bool m_initialized;
+  Transition* m_pendingTransition;
 };
 
 
