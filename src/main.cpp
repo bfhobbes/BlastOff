@@ -301,6 +301,10 @@ void on_exit_setting(void*) {
     Serial.println("Updating values");
 
     memcpy(settingValues, pendingValues, SETTING_MAX * sizeof(uint8_t));
+    Serial.println(settingValues[0]);
+    Serial.println(settingValues[1]);
+    Serial.println(settingValues[2]);
+    Serial.println(settingValues[3]);
     i2ceeprom.write(0, settingValues, sizeof(uint8_t) * SETTING_MAX);
   }
 }
@@ -340,10 +344,6 @@ void setup() {
       settingValues[i] = 0;
     }
   }
-
-  bool read(uint16_t addr, uint8_t *buffer, uint16_t num);
-  memset(settingValues, 0, SETTING_MAX * sizeof(uint8_t) );
-
 
   pinMode(FLASH_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
