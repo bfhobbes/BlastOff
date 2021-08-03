@@ -104,12 +104,12 @@ void showText3(const arduino::__FlashStringHelper *text1, const arduino::__Flash
     if(text3 == nullptr) {
       display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
     }
-    display.setCursor(10, 21);
+    display.setCursor(10, 22);
     display.println(text2);
   }
   if(text3) {
     display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
-    display.setCursor(10, 42);
+    display.setCursor(10, 44);
     display.println(text3);
   }
   display.display();      // Show initial text
@@ -202,6 +202,7 @@ void on_prearm(void *) {
 
 void on_setting_enter(void *) {
   showText(F("setting"));
+  memcpy(pendingValues, settingValues, SETTING_MAX * sizeof(uint8_t));
 }
 
 void on_abort_enter(void *) {
@@ -222,6 +223,7 @@ void on_settingname_enter(void *) {
 void on_settingvalue_enter(void *) {
   uint8_t currentValue = pendingValues[currentSetting];
   if(settings[currentSetting].values[currentValue] == nullptr) {
+    Serial.println("Resetting Value");
     currentValue = 0;
     pendingValues[currentSetting] = 0;
   }
@@ -292,9 +294,7 @@ void on_standard_update(void*){
   }
 }
 
-void on_enter_setting(void*) {
-  memcpy(pendingValues, settingValues, SETTING_MAX * sizeof(uint8_t));
-}
+
 
 void on_exit_setting(void*) {
   if(memcmp(pendingValues, settingValues, SETTING_MAX * sizeof(uint8_t)) != 0) {
@@ -331,6 +331,7 @@ void setup() {
 
   Serial.begin(9600);
 
+  // Initialise eeprom for persistent configuration settings
   if (i2ceeprom.begin(0x50)) {  // you can stick the new i2c addr in here, e.g. begin(0x51);
     Serial.println("Found I2C EEPROM");
   } else {
@@ -338,8 +339,9 @@ void setup() {
     while (1) delay(10);
   }
 
+  // Read current values and transform any 255's into 0 as 255 is default state for eeprom.
   i2ceeprom.read(0, settingValues, sizeof(uint8_t) * SETTING_MAX);
-  for(size_t i = 0; i < SETTING_MAX; ++i) {
+  for(size_t i = 0; i < SETTING_MAX; ++i) {     
     if(settingValues[i] == 255) {
       settingValues[i] = 0;
     }
@@ -374,10 +376,10 @@ void setup() {
 
   mainFsm.add_transition(&state_idle, &state_prearmed, SAFETY_OFF, nullptr);
 
-  mainFsm.add_timed_transition(&state_prearmed, &state_setting, 3000, nullptr);
+  mainFsm.add_timed_transition(&state_prearmed, &state_setting, 1000, nullptr);
   mainFsm.add_transition(&state_prearmed, &state_armed, ENTER_ARMED, nullptr);
 
-  mainFsm.add_transition(&state_setting, &state_idle, SAFETY_ON, on_enter_setting);
+  mainFsm.add_transition(&state_setting, &state_idle, SAFETY_ON, nullptr);
   mainFsm.add_transition(&state_setting, &state_settingname, LAUNCH_OFF, nullptr);
 
   mainFsm.add_transition(&state_settingname, &state_settingvalue, ENTER_SETTING_VALUE, nullptr ); 
