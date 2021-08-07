@@ -74,6 +74,58 @@ int currentSetting = 0;
 
 const int NUM_SETTINGS = sizeof(settings)/sizeof(SettingInfo);
 
+struct settings {
+  int valveTime;
+  byte countdownTime;
+};
+
+struct settings currentSettings = { 500, 5 };
+
+enum menuActions {
+  menuCallMenu,
+  menuSetActive,
+  menuSelectFromList,
+  menuRunFunction,
+  menuBlank
+};
+
+struct SetValue {
+  bool valType;
+  uint8_t minValue;
+  uint8_t maxValue;
+};
+
+struct SetFromList 
+{
+  uint8_t listEntryCount;
+  char *listPtr;
+};
+
+union itemParams {
+  void (*selectFunction)();
+  uint8_t menu;
+
+  struct SetValue setItemValue;
+  struct SetFromList setListValue;
+};
+
+struct MenuItem
+{
+  uint8_t selectType;
+  char itemText[18];
+
+  void *settingsValue;
+  union itemParams parameters;
+};
+
+char valveTimeList[][8] = {"100ms", "250ms", "300ms", "500ms", "750ms", "1s"};
+
+const struct MenuItem PROGMEM menuDefs[] = {
+  { menuSelectFromList, "MODE", &currentSettings.valveTime, { .setListValue = { 6, (char*)&valveTimeList}}},
+  { menuCallMenu, "Exit", NULL, {.menu = 0}}
+};
+
+
 void showText(const arduino::__FlashStringHelper *text) {
   display.clearDisplay();
   display.setTextSize(2); // Draw 2X-scale text
