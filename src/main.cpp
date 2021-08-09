@@ -9,6 +9,7 @@
 #include <Bounce2.h>
 
 #include "fsm.h"
+#include "blastoffSettings.h"
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -37,94 +38,7 @@ enum Events {
   LAUNCH
 };
 
-struct SettingInfo {
-  const char *Name;
-  const char *values[5];
-};
-
-enum SettingName {
-  VALVE_TIME,
-  LAUNCH_MODE,
-  COUNTDOWN_TIMER,
-  AUDIO,
-  SETTING_MAX
-};
-
-
-
-static const SettingInfo settings[] = {
-  {
-    "Valve Time", { "1000ms", "750ms", "500ms", "300ms", nullptr }
-  },
-  {
-    "Lnch Mode", { "Instant", "Count",  nullptr }
-  },
-  {
-    "Cnt Timer", { "10", "5", "3", nullptr }
-  },
-  {
-    "Exit", { nullptr }
-  }
-};
-
-uint8_t settingValues[SETTING_MAX];
-uint8_t pendingValues[SETTING_MAX];
-
 int currentSetting = 0;
-
-const int NUM_SETTINGS = sizeof(settings)/sizeof(SettingInfo);
-
-struct settings {
-  int valveTime;
-  byte countdownTime;
-};
-
-struct settings currentSettings = { 500, 5 };
-
-enum menuActions {
-  menuCallMenu,
-  menuSetActive,
-  menuSelectFromList,
-  menuRunFunction,
-  menuBlank
-};
-
-struct SetValue {
-  bool valType;
-  uint8_t minValue;
-  uint8_t maxValue;
-};
-
-struct SetFromList 
-{
-  uint8_t listEntryCount;
-  char *listPtr;
-};
-
-union itemParams {
-  void (*selectFunction)();
-  uint8_t menu;
-
-  struct SetValue setItemValue;
-  struct SetFromList setListValue;
-};
-
-struct MenuItem
-{
-  uint8_t selectType;
-  char itemText[18];
-
-  void *settingsValue;
-  union itemParams parameters;
-};
-
-char valveTimeList[][8] = {"100ms", "250ms", "300ms", "500ms", "750ms", "1s"};
-
-const struct MenuItem PROGMEM menuDefs[] = {
-  { menuSelectFromList, "MODE", &currentSettings.valveTime, { .setListValue = { 6, (char*)&valveTimeList}}},
-  { menuCallMenu, "Exit", NULL, {.menu = 0}}
-};
-
 
 void showText(const arduino::__FlashStringHelper *text) {
   display.clearDisplay();
@@ -165,12 +79,6 @@ void showText3(const arduino::__FlashStringHelper *text1, const arduino::__Flash
     display.println(text3);
   }
   display.display();      // Show initial text
-}
-
-int getNumberValue(int setting) {
-  int val = 0;
-  sscanf(settings[setting].values[settingValues[setting]], "%d", &val);
-  return val;
 }
 
 Bounce safetySwitch;
@@ -252,9 +160,11 @@ void on_prearm(void *) {
   }
 }
 
+settings prevSettings;
+
 void on_setting_enter(void *) {
   showText(F("setting"));
-  memcpy(pendingValues, settingValues, SETTING_MAX * sizeof(uint8_t));
+  memcpy(&prevSettings, &currentSettings, sizeof(settings));
 }
 
 void on_abort_enter(void *) {
@@ -262,12 +172,12 @@ void on_abort_enter(void *) {
 }
 
 void on_settingname_enter(void *) {
-  if(currentSetting >= NUM_SETTINGS) {
+  if(currentSetting >= settingMenuDefsSize) {
     currentSetting = 0;
   }
   showText3(
     F("Setting"),
-    F(settings[currentSetting].Name),
+    F(settingMenuDefs[currentSetting].itemText),
     nullptr
   );
 }
@@ -288,7 +198,7 @@ void on_settingvalue_enter(void *) {
 
 int countdownEnd = 0;
 void on_countdown_enter(void *) {
-  countdownEnd = millis() + (1000 * getNumberValue(COUNTDOWN_TIMER));
+  countdownEnd = millis() + (1000 * currentSettings.countdownTime);
 }
 
 void on_countdown_update(void *) {
