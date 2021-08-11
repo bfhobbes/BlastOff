@@ -1,10 +1,12 @@
 #include "blastoffSettings.h"
 
+const uint32_t settingMagic = 0x00000001;
+
 char modeDisplayList[][10] = { "COUNTDOWN", "INSTANT" };
-char valveTimeList[][8] = {"100ms", "250ms", "300ms", "500ms", "750ms", "1s"};
-int valveTimeListValues[] = {100,250,300,500,750,1000};
+char valveTimeList[][8] =  { "100ms", "250ms", "300ms", "500ms", "750ms", "1s" };
+int valveTimeListValues[] = { 100, 250, 300, 500, 750, 1000 };
 char countdownTimeList[][4] = { "10s", "5s", "3s"};
-int countdownTimeValues[] = { 10, 5, 3};
+int countdownTimeValues[] = { 10, 5, 3 };
 
 const struct MenuItem PROGMEM settingMenuDefs[] = {
   { menuSelectFromListIndex, "Mode", &currentSettings.mode, { .setListIndex = { 2, (char*)&modeDisplayList}}},
@@ -14,5 +16,5 @@ const struct MenuItem PROGMEM settingMenuDefs[] = {
 };
 
 struct settings currentSettings = { 0, 500, 5 };
-const int settingMenuDefsSize = sizeof(settings)/sizeof(MenuItem);
+const int settingMenuDefsSize = sizeof(settingMenuDefs)/sizeof(MenuItem);
 

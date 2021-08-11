@@ -5,6 +5,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_EEPROM_I2C.h>
+#include <stdarg.h>
 
 #include <Bounce2.h>
 
@@ -37,6 +38,20 @@ enum Events {
   ENTER_ARMED, 
   LAUNCH
 };
+
+#define SERIAL_PRINTF_MAX_BUFF      256
+void serialPrintf(const char *fmt, ...) {
+  /* Buffer for storing the formatted data */
+  char buff[SERIAL_PRINTF_MAX_BUFF];
+  /* pointer to the variable arguments list */
+  va_list pargs;
+  /* Initialise pargs to point to the first optional argument */
+  va_start(pargs, fmt);
+  /* create the formatted data and store in buff */
+  vsnprintf(buff, SERIAL_PRINTF_MAX_BUFF, fmt, pargs);
+  va_end(pargs);
+  Serial.print(buff);
+}
 
 int currentSetting = 0;
 
@@ -90,7 +105,6 @@ void on_init_enter(void *) {
 
 State state_init(on_init_enter, nullptr, nullptr);
 Fsm mainFsm(&state_init);
-
 
 enum LightEvents {
   LIGHT_OFF, 
@@ -165,6 +179,7 @@ settings prevSettings;
 void on_setting_enter(void *) {
   showText(F("setting"));
   memcpy(&prevSettings, &currentSettings, sizeof(settings));
+  currentSetting = 0;
 }
 
 void on_abort_enter(void *) {
@@ -172,6 +187,7 @@ void on_abort_enter(void *) {
 }
 
 void on_settingname_enter(void *) {
+  serialPrintf("Setting name: %d %d %s\n", currentSetting, settingMenuDefsSize, settingMenuDefs[currentSetting].itemText );
   if(currentSetting >= settingMenuDefsSize) {
     currentSetting = 0;
   }
@@ -183,17 +199,28 @@ void on_settingname_enter(void *) {
 }
 
 void on_settingvalue_enter(void *) {
-  uint8_t currentValue = pendingValues[currentSetting];
-  if(settings[currentSetting].values[currentValue] == nullptr) {
-    Serial.println("Resetting Value");
-    currentValue = 0;
-    pendingValues[currentSetting] = 0;
+  auto &menuDef = settingMenuDefs[currentSetting];
+
+  switch(menuDef.selectType) {
+    case menuSelectFromListIndex:
+      
+
+      break;
+    default:
+      break;
   }
-  showText3(
-    F("Setting"),
-    F(settings[currentSetting].Name),
-    F(settings[currentSetting].values[currentValue])
-  );
+
+  // uint8_t currentValue = pendingValues[currentSetting];
+  // if(settings[currentSetting].values[currentValue] == nullptr) {
+  //   Serial.println("Resetting Value");
+  //   currentValue = 0;
+  //   pendingValues[currentSetting] = 0;
+  // }
+  // showText3(
+  //   F("Setting"),
+  //   F(settings[currentSetting].Name),
+  //   F(settings[currentSetting].values[currentValue])
+  // );
 }
 
 int countdownEnd = 0;
@@ -222,7 +249,7 @@ void on_settingname_update(void *ctx) {
     on_settingname_enter(ctx);    
   }
   if(safetySwitch.rose()) {
-    if(strcmp(settings[currentSetting].Name, "Exit")==0) {
+    if(settingMenuDefs[currentSetting].selectType == menuCallMenu && settingMenuDefs[currentSetting].parameters.menu == 99) {
       mainFsm.trigger(EXIT_SETTING);
     } else {
       mainFsm.trigger(ENTER_SETTING_VALUE);
@@ -231,7 +258,8 @@ void on_settingname_update(void *ctx) {
 }
 void on_settingvalue_update(void *ctx) {
   if(launchSwitch.rose()) {
-    pendingValues[currentSetting]++;
+    Serial.println("FIX THIS");
+//    pendingValues[currentSetting]++;
     on_settingvalue_enter(ctx);    
   }
   if(safetySwitch.fell()) {
@@ -259,15 +287,11 @@ void on_standard_update(void*){
 
 
 void on_exit_setting(void*) {
-  if(memcmp(pendingValues, settingValues, SETTING_MAX * sizeof(uint8_t)) != 0) {
+  if(memcmp(&prevSettings, &currentSettings, sizeof(prevSettings)) != 0) {
     Serial.println("Updating values");
 
-    memcpy(settingValues, pendingValues, SETTING_MAX * sizeof(uint8_t));
-    Serial.println(settingValues[0]);
-    Serial.println(settingValues[1]);
-    Serial.println(settingValues[2]);
-    Serial.println(settingValues[3]);
-    i2ceeprom.write(0, settingValues, sizeof(uint8_t) * SETTING_MAX);
+    memcpy(&currentSettings, &prevSettings, sizeof(prevSettings));
+    //i2ceeprom.write(0, currentSettings, sizeof(prevSettings));
   }
 }
 
@@ -302,12 +326,12 @@ void setup() {
   }
 
   // Read current values and transform any 255's into 0 as 255 is default state for eeprom.
-  i2ceeprom.read(0, settingValues, sizeof(uint8_t) * SETTING_MAX);
-  for(size_t i = 0; i < SETTING_MAX; ++i) {     
-    if(settingValues[i] == 255) {
-      settingValues[i] = 0;
-    }
-  }
+  // i2ceeprom.read(0, &currentSettings, sizeof(settings));
+  // for(size_t i = 0; i < SETTING_MAX; ++i) {     
+  //   if(settingValues[i] == 255) {
+  //     settingValues[i] = 0;
+  //   }
+  // }
 
   pinMode(FLASH_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
