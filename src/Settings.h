@@ -20,7 +20,7 @@ struct SetValue {
 struct SetFromListIndex 
 {
   uint8_t listEntryCount;
-  char *listPtr;
+  char *listPtr[10];
 };
 
 struct SetFromList 
