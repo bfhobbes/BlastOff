@@ -4,10 +4,9 @@
 
 enum menuActions {
   menuCallMenu,
-  menuSetActive,
   menuSelectFromList,
   menuSelectFromListIndex,
-  menuRunFunction,
+  menuSelectFromIntList,
   menuBlank
 };
 
@@ -30,6 +29,13 @@ struct SetFromList
   char *listPtr;
 };
 
+struct SetFromIntList
+{
+  uint8_t listEntryCount;
+  int *listPtr;
+  void (*valueFormatter)(char *buffer, int val);
+};
+
 union itemParams {
   void (*selectFunction)();
   uint8_t menu;
@@ -37,6 +43,7 @@ union itemParams {
   struct SetValue setItemValue;
   struct SetFromListIndex setListIndex;
   struct SetFromList setListValue;
+  struct SetFromIntList setIntListValue;
 };
 
 struct MenuItem
