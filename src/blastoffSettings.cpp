@@ -7,11 +7,15 @@ int valveTimeListValues[] = { 100, 250, 300, 500, 750, 1000 };
 int countdownTimeValues[] = { 10, 5, 3 };
 
 void msecsFormatter(char *buffer, int val) {
-  sprintf(buffer, "%d", val);
+  if(val >= 1000) {
+    sprintf(buffer, "%.1fS", (float)val / 1000.0f);
+  } else {
+    sprintf(buffer, "%d ms", val);
+  }
 }
 
 void secsFormatter(char *buffer, int val) {
-  sprintf(buffer, "%d", val);
+  sprintf(buffer, "%dS", val);
 }
 
 const struct MenuItem PROGMEM settingMenuDefs[] = {
