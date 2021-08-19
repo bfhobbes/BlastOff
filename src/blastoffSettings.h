@@ -14,6 +14,7 @@ struct settings {
   int mode;
   int valveTime;
   uint8_t countdownTime;
+  int settingsDelayTimeMS;
 };
 
 extern struct settings currentSettings;

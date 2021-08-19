@@ -192,7 +192,7 @@ void on_settingvalue_enter(void *)
     {
       int settingIndex = *(int *)(menuDef.settingsValue);
       const char *settingValStr = menuDef.parameters.setListIndex.listPtr[settingIndex];
-      serialPrintf("%d %s", settingIndex, settingValStr);
+      serialPrintf("%d %s\n", settingIndex, settingValStr);
       showText3(
           F("Setting"),
           F(menuDef.itemText),
@@ -215,7 +215,38 @@ void on_settingvalue_enter(void *)
   default:
     break;
   }
+}
 
+void nextSettingValue() {
+  auto &menuDef = settingMenuDefs[currentSetting];
+  switch(menuDef.selectType) {
+    case menuSelectFromListIndex: 
+    {
+      int settingIndex = *(int *)(menuDef.settingsValue);
+      ++settingIndex;
+      if(settingIndex >= menuDef.parameters.setListIndex.listEntryCount) {
+        settingIndex = 0;
+      }
+      *(int*)(menuDef.settingsValue) = settingIndex;      
+      break;
+    }
+    case menuSelectFromIntList:
+    {
+      int currentVal = *(int*)menuDef.settingsValue;
+      int i = 0;
+      for( i; i < menuDef.parameters.setIntListValue.listEntryCount; ++i ) {
+        if(currentVal == menuDef.parameters.setIntListValue.listPtr[i]) {
+          break;
+        }
+      }
+      ++i;
+      if(i >= menuDef.parameters.setIntListValue.listEntryCount) {
+        i = 0;
+      }
+      *(int*)menuDef.settingsValue = menuDef.parameters.setIntListValue.listPtr[i];
+      break;
+    }
+}
   // uint8_t currentValue = pendingValues[currentSetting];
   // if(settings[currentSetting].values[currentValue] == nullptr) {
   //   Serial.println("Resetting Value");
@@ -276,7 +307,7 @@ void on_settingvalue_update(void *ctx)
 {
   if (launchSwitch.rose())
   {
-    Serial.println("FIX THIS");
+    nextSettingValue();
     //    pendingValues[currentSetting]++;
     on_settingvalue_enter(ctx);
   }
@@ -317,6 +348,7 @@ void on_exit_setting(void *)
   }
 }
 
+
 State state_idle(on_idle_enter, on_standard_update, nullptr);
 
 State state_prearmed(on_prearm_enter, on_prearm, nullptr);
@@ -351,6 +383,7 @@ void setup()
       delay(10);
   }
 
+  displayInit();
   // Read current values and transform any 255's into 0 as 255 is default state for eeprom.
   // i2ceeprom.read(0, &currentSettings, sizeof(settings));
   // for(size_t i = 0; i < SETTING_MAX; ++i) {
@@ -382,7 +415,7 @@ void setup()
 
   mainFsm.add_transition(&state_idle, &state_prearmed, SAFETY_OFF, nullptr);
 
-  mainFsm.add_timed_transition(&state_prearmed, &state_setting, 1000, nullptr);
+  mainFsm.add_timed_transition(&state_prearmed, &state_setting, 100, nullptr);
   mainFsm.add_transition(&state_prearmed, &state_armed, ENTER_ARMED, nullptr);
 
   mainFsm.add_transition(&state_setting, &state_idle, SAFETY_ON, nullptr);
