@@ -171,25 +171,19 @@ void on_abort_enter(void *)
   showText(F("ABORT"));
 }
 
-void on_settingname_enter(void *)
-{
-  serialPrintf("Setting name: %d %d %s\n", currentSetting, settingMenuDefsSize, settingMenuDefs[currentSetting].itemText);
-  if (currentSetting >= settingMenuDefsSize)
-  {
-    currentSetting = 0;
-  }
-  showText3(
-      F("Setting"),
-      F(settingMenuDefs[currentSetting].itemText),
-      nullptr);
-}
-
-void on_settingvalue_enter(void *)
-{
-  auto &menuDef = settingMenuDefs[currentSetting];
+void displaySetting(int invertLine) {
+ auto &menuDef = settingMenuDefs[currentSetting];
 
   switch (menuDef.selectType)
   {
+    case menuCallMenu:
+    {
+      showText3(
+        F("Setting"),
+        F(menuDef.itemText),
+        nullptr);
+      break;
+    }
     case menuSelectFromListIndex:
     {
       int settingIndex = *(int *)(menuDef.settingsValue);
@@ -198,7 +192,9 @@ void on_settingvalue_enter(void *)
       showText3(
           F("Setting"),
           F(menuDef.itemText),
-          F(settingValStr));
+          F(settingValStr),
+          invertLine
+        );
       break;
     }
     case menuSelectFromIntList:
@@ -210,13 +206,29 @@ void on_settingvalue_enter(void *)
       showText3(
         F("Setting"),
         F(menuDef.itemText),
-        F(buff)
+        F(buff),
+        invertLine
       );
       break;
     }
   default:
     break;
   }
+}
+
+void on_settingname_enter(void *)
+{
+  serialPrintf("Setting name: %d %d %s\n", currentSetting, settingMenuDefsSize, settingMenuDefs[currentSetting].itemText);
+  if (currentSetting >= settingMenuDefsSize)
+  {
+    currentSetting = 0;
+  }
+  displaySetting(1);
+}
+
+void on_settingvalue_enter(void *)
+{
+  displaySetting(2);
 }
 
 void nextSettingValue() {

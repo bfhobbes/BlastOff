@@ -46,28 +46,52 @@ void showCountdownText(const arduino::__FlashStringHelper *text)
   display.display(); // Show initial text
 }
 
-void showText3(const arduino::__FlashStringHelper *text1, const arduino::__FlashStringHelper *text2, const arduino::__FlashStringHelper *text3)
+void showText3(const arduino::__FlashStringHelper *text1, const arduino::__FlashStringHelper *text2, const arduino::__FlashStringHelper *text3, int invertLine)
 {
+  if(invertLine < 0 ) {
+    invertLine = text3 == nullptr ? 1 : 2;
+  }
+
   display.clearDisplay();
   display.setTextSize(2); // Draw 2X-scale text
   display.setTextColor(SSD1306_WHITE);
+
+  if(invertLine>=0) {
+    display.fillRoundRect(2, (22*invertLine) - 2, 124, 22, 3, SSD1306_WHITE);
+  }
+
   if (text1)
   {
-    display.setCursor(10, 0);
+    if (invertLine == 0)
+    {
+      display.setTextColor(SSD1306_BLACK); // Draw 'inverse' text
+    }
+
+    display.setCursor(2, 0);
     display.println(text1);
+
+    if( invertLine == 0) {
+      display.setTextColor(SSD1306_WHITE);
+    }
   }
   if (text2)
   {
-    if (text3 == nullptr)
+    if (invertLine == 1)
     {
-      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
+      display.setTextColor(SSD1306_BLACK); // Draw 'inverse' text
     }
     display.setCursor(10, 22);
     display.println(text2);
+    if( invertLine == 1) {
+      display.setTextColor(SSD1306_WHITE);
+    }
   }
   if (text3)
   {
-    display.setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
+    if (invertLine == 2)
+    {
+      display.setTextColor(SSD1306_BLACK); // Draw 'inverse' text
+    }
     display.setCursor(10, 44);
     display.println(text3);
   }
