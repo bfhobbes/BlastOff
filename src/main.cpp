@@ -13,6 +13,8 @@
 
 Adafruit_EEPROM_I2C i2ceeprom;
 
+settings prevSettings;
+
 #define FLASH_PIN LED_BUILTIN
 #define ARMED_LIGHT 7
 #define ARMING_PIN 9
@@ -23,6 +25,8 @@ enum Events
 {
   SAFETY_OFF,
   SAFETY_ON,
+  LAUNCH_COUNTDOWN,
+  LAUNCH_INSTANT,
   LAUNCH_ON,
   LAUNCH_OFF,
   ENTER_SETTING,
@@ -155,8 +159,6 @@ void on_prearm(void *)
   }
 }
 
-settings prevSettings;
-
 void on_setting_enter(void *)
 {
   showText(F("setting"));
@@ -246,18 +248,7 @@ void nextSettingValue() {
       *(int*)menuDef.settingsValue = menuDef.parameters.setIntListValue.listPtr[i];
       break;
     }
-}
-  // uint8_t currentValue = pendingValues[currentSetting];
-  // if(settings[currentSetting].values[currentValue] == nullptr) {
-  //   Serial.println("Resetting Value");
-  //   currentValue = 0;
-  //   pendingValues[currentSetting] = 0;
-  // }
-  // showText3(
-  //   F("Setting"),
-  //   F(settings[currentSetting].Name),
-  //   F(settings[currentSetting].values[currentValue])
-  // );
+  }
 }
 
 int countdownEnd = 0;
@@ -337,14 +328,31 @@ void on_standard_update(void *)
   }
 }
 
+void on_armed_update(void *)
+{
+  if (safetySwitch.rose())
+  {
+    mainFsm.trigger(SAFETY_ON);
+  }
+  if (launchSwitch.fell())
+  {
+    if(currentSettings.mode == MODE_COUNTDOWN) {
+      mainFsm.trigger(LAUNCH_COUNTDOWN);
+    } else {
+      mainFsm.trigger(LAUNCH_INSTANT);
+    }
+  }
+}
+
 void on_exit_setting(void *)
 {
-  if (memcmp(&prevSettings, &currentSettings, sizeof(prevSettings)) != 0)
+  if (memcmp(&prevSettings, &currentSettings, sizeof(settings)) != 0)
   {
     Serial.println("Updating values");
 
-    memcpy(&currentSettings, &prevSettings, sizeof(prevSettings));
-    //i2ceeprom.write(0, currentSettings, sizeof(prevSettings));
+    if(memcmp(&currentSetting, &prevSettings, sizeof(settings))!=0) {
+      i2ceeprom.write(0, (uint8_t*)&currentSettings, sizeof(settings));
+    }
   }
 }
 
@@ -357,7 +365,7 @@ State state_setting(on_setting_enter, on_standard_update, nullptr);
 State state_settingname(on_settingname_enter, on_settingname_update, nullptr);
 State state_settingvalue(on_settingvalue_enter, on_settingvalue_update, nullptr);
 
-State state_armed(on_armed_enter, on_standard_update, on_armed_exit);
+State state_armed(on_armed_enter, on_armed_update, on_armed_exit);
 
 State state_launching(on_Launching_enter, on_standard_update, on_launching_exit);
 
@@ -385,12 +393,10 @@ void setup()
 
   displayInit();
   // Read current values and transform any 255's into 0 as 255 is default state for eeprom.
-  // i2ceeprom.read(0, &currentSettings, sizeof(settings));
-  // for(size_t i = 0; i < SETTING_MAX; ++i) {
-  //   if(settingValues[i] == 255) {
-  //     settingValues[i] = 0;
-  //   }
-  // }
+  i2ceeprom.read(0, (uint8_t*)&prevSettings, sizeof(settings));
+  if(prevSettings.magic == currentSettings.magic) {
+    memcpy(&currentSettings, &prevSettings, sizeof(settings));
+  }
 
   pinMode(FLASH_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
@@ -415,7 +421,7 @@ void setup()
 
   mainFsm.add_transition(&state_idle, &state_prearmed, SAFETY_OFF, nullptr);
 
-  mainFsm.add_timed_transition(&state_prearmed, &state_setting, 100, nullptr);
+  mainFsm.add_timed_transition(&state_prearmed, &state_setting, &currentSettings.settingsDelayTimeMS, nullptr);
   mainFsm.add_transition(&state_prearmed, &state_armed, ENTER_ARMED, nullptr);
 
   mainFsm.add_transition(&state_setting, &state_idle, SAFETY_ON, nullptr);
@@ -432,10 +438,11 @@ void setup()
 
   mainFsm.add_timed_transition(&state_abort, &state_idle, 3000, nullptr);
 
-  mainFsm.add_transition(&state_armed, &state_countdown, LAUNCH_ON, nullptr);
+  mainFsm.add_transition(&state_armed, &state_countdown, LAUNCH_COUNTDOWN, nullptr);
+  mainFsm.add_transition(&state_armed, &state_launching, LAUNCH_INSTANT, nullptr);
   mainFsm.add_transition(&state_armed, &state_idle, SAFETY_ON, nullptr);
 
-  mainFsm.add_timed_transition(&state_launching, &state_postlaunch, 300, nullptr);
+  mainFsm.add_timed_transition(&state_launching, &state_postlaunch, &currentSettings.valveTime, nullptr);
   mainFsm.add_transition(&state_postlaunch, &state_idle, SAFETY_ON, nullptr);
 
   // Show initial display buffer contents on the screen --

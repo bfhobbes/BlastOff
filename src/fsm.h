@@ -30,6 +30,8 @@ public:
 
   void add_timed_transition(State* state_from, State* state_to,
                             unsigned long interval, void (*on_transition)(void *));
+  void add_timed_transition(State* state_from, State* state_to,
+                              int *intervalAddr, void (*on_transition)(void *));
 
   void check_timed_transitions(void *context=nullptr);
 
@@ -51,6 +53,7 @@ private:
     Transition transition;
     unsigned long start;
     unsigned long interval;
+    int *intervalAddr;
   };
 
   static Transition create_transition(State* state_from, State* state_to,

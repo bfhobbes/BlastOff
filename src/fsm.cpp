@@ -63,6 +63,28 @@ void Fsm::add_timed_transition(State* state_from, State* state_to,
   timed_transition.transition = transition;
   timed_transition.start = 0;
   timed_transition.interval = interval;
+  timed_transition.intervalAddr = nullptr;
+
+  m_timed_transitions = (TimedTransition*) realloc(
+      m_timed_transitions, (m_num_timed_transitions + 1) * sizeof(TimedTransition));
+  m_timed_transitions[m_num_timed_transitions] = timed_transition;
+  m_num_timed_transitions++;
+}
+
+void Fsm::add_timed_transition(State* state_from, State* state_to,
+                                int *intervalAddr, void (*on_transition)(void *))
+{
+  if (state_from == NULL || state_to == NULL)
+    return;
+
+  Transition transition = Fsm::create_transition(state_from, state_to, 0,
+                                                 on_transition);
+
+  TimedTransition timed_transition;
+  timed_transition.transition = transition;
+  timed_transition.start = 0;
+  timed_transition.interval = 0;
+  timed_transition.intervalAddr = intervalAddr;
 
   m_timed_transitions = (TimedTransition*) realloc(
       m_timed_transitions, (m_num_timed_transitions + 1) * sizeof(TimedTransition));
@@ -127,6 +149,9 @@ void Fsm::check_timed_transitions(void *context)
       if (transition->start == 0)
       {
         transition->start = millis();
+        if(transition->intervalAddr!=nullptr) {
+          transition->interval = *transition->intervalAddr;
+        }
       }
       else{
         unsigned long now = millis();
@@ -181,8 +206,13 @@ void Fsm::make_transition(Transition* transition, void *context)
   for (int i = 0; i < m_num_timed_transitions; ++i)
   {
     TimedTransition* ttransition = &m_timed_transitions[i];
-    if (ttransition->transition.state_from == m_current_state)
+    if (ttransition->transition.state_from == m_current_state){
       ttransition->start = now;
+      if(ttransition->intervalAddr != nullptr) {
+        ttransition->interval = *ttransition->intervalAddr;
+      }
+    }
+
   }
 
 }

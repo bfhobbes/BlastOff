@@ -4,13 +4,12 @@
 #include "Settings.h"
 
 enum ModeSettings {
-  Countdown,
-  Instant
+  MODE_COUNTDOWN,
+  MODE_INSTANT
 };
 
-extern const uint32_t settingMagic;
-
 struct settings {
+  uint32_t magic;
   int mode;
   int valveTime;
   uint8_t countdownTime;
