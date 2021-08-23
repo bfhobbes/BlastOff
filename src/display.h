@@ -8,5 +8,6 @@ void clearDisplay();
 void showText(const arduino::__FlashStringHelper *text);
 void showCountdownText(const arduino::__FlashStringHelper *text);
 void showText3(const arduino::__FlashStringHelper *text1, const arduino::__FlashStringHelper *text2, const arduino::__FlashStringHelper *text3, int invertLine = -1);
+void showLogo();
 
 #endif // DISPLAY_H
