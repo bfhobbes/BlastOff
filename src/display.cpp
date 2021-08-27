@@ -176,3 +176,18 @@ void showLogo() {
   display.drawBitmap(0,0, bitmap_cublogo, 128, 64, SSD1306_WHITE );
   display.display();
 }
+
+void centerText(const arduino::__FlashStringHelper *text) {
+    display.clearDisplay();
+    display.setTextSize(3); // Draw 2X-scale text
+    display.setTextColor(SSD1306_WHITE);
+
+    int16_t x,y;
+    uint16_t w,h;
+    display.getTextBounds(text, 0, 0, &x, &y, &w, &h);
+
+    display.setCursor((SCREEN_WIDTH - w)/2, (SCREEN_HEIGHT - h)/2);
+    display.println(text);
+    display.display();
+
+}

@@ -7,6 +7,8 @@
 
 #include <Bounce2.h>
 
+#include <JLed_base.h>
+
 #include "fsm.h"
 #include "blastoffSettings.h"
 #include "display.h"
@@ -72,11 +74,39 @@ enum LightEvents
   LIGHT_STROBE
 };
 
+class ArduinoHal {
+ public:
+    using PinType = uint8_t;
+
+    explicit ArduinoHal(PinType pin) noexcept : pin_(pin) {}
+
+    void analogWrite(uint8_t val) const {
+        // some platforms, e.g. STM need lazy initialization
+        if (!setup_) {
+            ::pinMode(pin_, OUTPUT);
+            setup_ = true;
+        }
+        ::analogWrite(pin_, val);
+    }
+
+    uint32_t millis() const { return ::millis(); }
+
+ private:
+    mutable bool setup_ = false;
+    PinType pin_;
+};
+
+class JLed : public jled::TJLed<ArduinoHal, JLed> {
+    using jled::TJLed<ArduinoHal, JLed>::TJLed;
+};
+auto armedLed = JLed(ARMED_LIGHT); // .Repeat(5);
+
+
 State light_off([](void *)
-                { digitalWrite(ARMED_LIGHT, LOW); },
+                { /*digitalWrite(ARMED_LIGHT, LOW);*/ },
                 nullptr, nullptr);
 State light_on([](void *)
-               { digitalWrite(ARMED_LIGHT, HIGH); },
+               { /*digitalWrite(ARMED_LIGHT, HIGH);*/ },
                nullptr, nullptr);
 Fsm lightFsm(&light_off);
 
@@ -115,7 +145,7 @@ void on_Launching_enter(void *)
 {
   digitalWrite(FLASH_PIN, HIGH);
   digitalWrite(RELAY_PIN, HIGH);
-  showCountdownText(F("LAUNCH"));
+  centerText(F("LAUNCH!"));
 }
 
 void on_launching_exit(void *)
@@ -126,29 +156,33 @@ void on_launching_exit(void *)
 
 void on_idle_enter(void *)
 {
-  showText(F("idle"));
+  centerText(F("Safe"));
 }
 
 void on_armed_enter(void *)
 {
   lightFsm.trigger(LIGHT_ON);
 
-  showText(F("armed"));
+  centerText(F("Armed"));
+  armedLed.Breathe(500).Forever();
+  // showText(F("armed"));
 }
 
 void on_armed_exit(void *)
 {
+  armedLed.Stop();
+
   lightFsm.trigger(LIGHT_OFF);
 }
 
 void on_postlaunch_enter(void *)
 {
-  showText(F("postlaunch"));
+  showLogo();
 }
 
 void on_prearm_enter(void *)
 {
-  showText(F("prearmed"));
+  centerText(F("..."));
 }
 
 void on_prearm(void *)
@@ -161,14 +195,14 @@ void on_prearm(void *)
 
 void on_setting_enter(void *)
 {
-  showText(F("setting"));
+  showText(F("Setting"));
   memcpy(&prevSettings, &currentSettings, sizeof(settings));
   currentSetting = 0;
 }
 
 void on_abort_enter(void *)
 {
-  showText(F("ABORT"));
+  centerText(F("ABORTED"));
 }
 
 void displaySetting(int invertLine) {
@@ -420,14 +454,14 @@ void setup()
   launchSwitch.attach(LAUNCH_PIN, INPUT_PULLUP);
   launchSwitch.interval(25);
 
-  lightFsm.add_transition(&light_off, &light_on, LIGHT_ON, nullptr);
-  lightFsm.add_transition(&light_on, &light_off, LIGHT_OFF, nullptr);
+  // lightFsm.add_transition(&light_off, &light_on, LIGHT_ON, nullptr);
+  // lightFsm.add_transition(&light_on, &light_off, LIGHT_OFF, nullptr);
 
-  lightFsm.add_transition(&light_off, &light_strobe_on, LIGHT_STROBE, [](void *)
-                          { strobeCount = 3; });
-  lightFsm.add_transition(&light_strobe_off, &light_off, LIGHT_OFF, nullptr);
-  lightFsm.add_timed_transition(&light_strobe_off, &light_strobe_on, 300, nullptr);
-  lightFsm.add_timed_transition(&light_strobe_on, &light_strobe_off, 300, nullptr);
+  // lightFsm.add_transition(&light_off, &light_strobe_on, LIGHT_STROBE, [](void *)
+  //                         { strobeCount = 3; });
+  // lightFsm.add_transition(&light_strobe_off, &light_off, LIGHT_OFF, nullptr);
+  // lightFsm.add_timed_transition(&light_strobe_off, &light_strobe_on, 300, nullptr);
+  // lightFsm.add_timed_transition(&light_strobe_on, &light_strobe_off, 300, nullptr);
 
   mainFsm.add_timed_transition(&state_init, &state_idle, 50, nullptr);
 
@@ -464,6 +498,8 @@ void setup()
 
 void loop()
 {
+  armedLed.Update();
+
   launchSwitch.update();
   safetySwitch.update();
 
