@@ -35,6 +35,7 @@ enum Events
   ENTER_SETTING_VALUE,
   EXIT_SETTING,
   ENTER_ARMED,
+  ABORT_DONE,
   LAUNCH
 };
 
@@ -101,50 +102,11 @@ class JLed : public jled::TJLed<ArduinoHal, JLed> {
 };
 auto armedLed = JLed(ARMED_LIGHT); // .Repeat(5);
 
-
-State light_off([](void *)
-                { /*digitalWrite(ARMED_LIGHT, LOW);*/ },
-                nullptr, nullptr);
-State light_on([](void *)
-               { /*digitalWrite(ARMED_LIGHT, HIGH);*/ },
-               nullptr, nullptr);
-Fsm lightFsm(&light_off);
-
-int strobeCount = 0;
-State light_strobe_on(
-    [](void *)
-    {
-      digitalWrite(ARMED_LIGHT, HIGH);
-      --strobeCount;
-    },
-    nullptr,
-    nullptr);
-State light_strobe_off(
-    [](void *)
-    { digitalWrite(ARMED_LIGHT, LOW); },
-    [](void *)
-    {
-      if (strobeCount <= 0)
-      {
-        lightFsm.trigger(LIGHT_OFF);
-      }
-    },
-    nullptr);
-
-void on_light_on_enter(void *)
-{
-  digitalWrite(FLASH_PIN, HIGH);
-}
-
-void on_light_off_enter(void *)
-{
-  digitalWrite(FLASH_PIN, LOW);
-}
-
 void on_Launching_enter(void *)
 {
   digitalWrite(FLASH_PIN, HIGH);
   digitalWrite(RELAY_PIN, HIGH);
+  armedLed.On().Update();
   centerText(F("LAUNCH!"));
 }
 
@@ -152,6 +114,7 @@ void on_launching_exit(void *)
 {
   digitalWrite(FLASH_PIN, LOW);
   digitalWrite(RELAY_PIN, LOW);
+  armedLed.FadeOff(2000).Repeat(1);
 }
 
 void on_idle_enter(void *)
@@ -161,18 +124,20 @@ void on_idle_enter(void *)
 
 void on_armed_enter(void *)
 {
-  lightFsm.trigger(LIGHT_ON);
-
-  centerText(F("Armed"));
+  if(currentSettings.mode == MODE_COUNTDOWN) {
+    char buff[20];
+    sprintf(buff, "%.2f", (float)currentSettings.countdownTime);
+    
+    showCountdownText(F(buff), F("Ready to launch"));
+  } else {
+    centerText(F("Armed"));
+  }
   armedLed.Breathe(500).Forever();
-  // showText(F("armed"));
 }
 
 void on_armed_exit(void *)
 {
   armedLed.Stop();
-
-  lightFsm.trigger(LIGHT_OFF);
 }
 
 void on_postlaunch_enter(void *)
@@ -203,6 +168,13 @@ void on_setting_enter(void *)
 void on_abort_enter(void *)
 {
   centerText(F("ABORTED"));
+}
+
+
+void on_abort_update(void *) {
+  if(!armedLed.IsRunning()) {
+    mainFsm.trigger(ABORT_DONE, nullptr);
+  }
 }
 
 void displaySetting(int invertLine) {
@@ -310,7 +282,7 @@ void on_countdown_update(void *)
   char buff[20];
   sprintf(buff, "%.2f", (float)countdown / 1000.0f);
 
-  showCountdownText(F(buff));
+  showCountdownText(F(buff), F("Launching in"));
   if (safetySwitch.rose())
   {
     mainFsm.trigger(SAFETY_ON);
@@ -416,7 +388,7 @@ State state_armed(on_armed_enter, on_armed_update, on_armed_exit);
 State state_launching(on_Launching_enter, on_standard_update, on_launching_exit);
 
 State state_countdown(on_countdown_enter, on_countdown_update, nullptr);
-State state_abort(on_abort_enter, on_standard_update, nullptr);
+State state_abort(on_abort_enter, on_abort_update, nullptr);
 
 State state_postlaunch(on_postlaunch_enter, on_standard_update, nullptr);
 
@@ -454,15 +426,6 @@ void setup()
   launchSwitch.attach(LAUNCH_PIN, INPUT_PULLUP);
   launchSwitch.interval(25);
 
-  // lightFsm.add_transition(&light_off, &light_on, LIGHT_ON, nullptr);
-  // lightFsm.add_transition(&light_on, &light_off, LIGHT_OFF, nullptr);
-
-  // lightFsm.add_transition(&light_off, &light_strobe_on, LIGHT_STROBE, [](void *)
-  //                         { strobeCount = 3; });
-  // lightFsm.add_transition(&light_strobe_off, &light_off, LIGHT_OFF, nullptr);
-  // lightFsm.add_timed_transition(&light_strobe_off, &light_strobe_on, 300, nullptr);
-  // lightFsm.add_timed_transition(&light_strobe_on, &light_strobe_off, 300, nullptr);
-
   mainFsm.add_timed_transition(&state_init, &state_idle, 50, nullptr);
 
   mainFsm.add_transition(&state_idle, &state_prearmed, SAFETY_OFF, nullptr);
@@ -479,10 +442,11 @@ void setup()
   mainFsm.add_transition(&state_settingvalue, &state_settingname, ENTER_SETTING, nullptr);
 
   mainFsm.add_transition(&state_countdown, &state_abort, SAFETY_ON, [](void *)
-                         { lightFsm.trigger(LIGHT_STROBE); });
+                         { armedLed.Blink(300,300).Repeat(3); });
   mainFsm.add_transition(&state_countdown, &state_launching, LAUNCH, nullptr);
 
   mainFsm.add_timed_transition(&state_abort, &state_idle, 3000, nullptr);
+  mainFsm.add_transition(&state_abort, &state_idle, ABORT_DONE, nullptr);
 
   mainFsm.add_transition(&state_armed, &state_countdown, LAUNCH_COUNTDOWN, nullptr);
   mainFsm.add_transition(&state_armed, &state_launching, LAUNCH_INSTANT, nullptr);
@@ -504,5 +468,4 @@ void loop()
   safetySwitch.update();
 
   mainFsm.run_machine();
-  lightFsm.run_machine();
 }

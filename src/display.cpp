@@ -108,12 +108,25 @@ void showText(const arduino::__FlashStringHelper *text)
   display.display(); // Show initial text
 }
 
-void showCountdownText(const arduino::__FlashStringHelper *text)
+void showCountdownText(const arduino::__FlashStringHelper *text, const arduino::__FlashStringHelper *title)
 {
   display.clearDisplay();
-  display.setTextSize(3); // Draw 3X-scale text
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(30, 20);
+
+  int16_t x,y;
+  uint16_t w,h;
+
+  if(title) {    
+    display.setTextSize(1); // Draw 2X-scale text
+
+    display.getTextBounds(title, 0, 0, &x, &y, &w, &h);
+    
+    display.setCursor((SCREEN_WIDTH - w)/2, h);
+    display.println(title);
+  }
+
+  display.setTextSize(3); // Draw 3X-scale text
+  display.setCursor(30, (SCREEN_HEIGHT - 2*h)/2);
   display.println(text);
   display.display(); // Show initial text
 }
