@@ -54,7 +54,7 @@ void serialPrintf(const char *fmt, ...)
   Serial.print(buff);
 }
 
-int currentSetting = 0;
+int currentSettingIndex = 0;
 
 
 Bounce safetySwitch;
@@ -62,18 +62,11 @@ Bounce launchSwitch;
 
 void on_init_enter(void *)
 {
-  showText(F("init"));
+  centerText(F("---"));
 }
 
 State state_init(on_init_enter, nullptr, nullptr);
 Fsm mainFsm(&state_init);
-
-enum LightEvents
-{
-  LIGHT_OFF,
-  LIGHT_ON,
-  LIGHT_STROBE
-};
 
 class ArduinoHal {
  public:
@@ -100,7 +93,8 @@ class ArduinoHal {
 class JLed : public jled::TJLed<ArduinoHal, JLed> {
     using jled::TJLed<ArduinoHal, JLed>::TJLed;
 };
-auto armedLed = JLed(ARMED_LIGHT); // .Repeat(5);
+auto armedLed = JLed(ARMED_LIGHT).MaxBrightness(currentSettings.maxBrightness); // .Repeat(5);
+
 
 void on_Launching_enter(void *)
 {
@@ -120,6 +114,7 @@ void on_launching_exit(void *)
 void on_idle_enter(void *)
 {
   centerText(F("Safe"));
+  armedLed.Off().Repeat(1);
 }
 
 void on_armed_enter(void *)
@@ -132,7 +127,7 @@ void on_armed_enter(void *)
   } else {
     centerText(F("Armed"));
   }
-  armedLed.Breathe(500).Forever();
+  armedLed.Breathe(currentSettings.breathDurationMS).Forever();
 }
 
 void on_armed_exit(void *)
@@ -162,7 +157,7 @@ void on_setting_enter(void *)
 {
   showText(F("Setting"));
   memcpy(&prevSettings, &currentSettings, sizeof(settings));
-  currentSetting = 0;
+  currentSettingIndex = 0;
 }
 
 void on_abort_enter(void *)
@@ -178,7 +173,7 @@ void on_abort_update(void *) {
 }
 
 void displaySetting(int invertLine) {
- auto &menuDef = settingMenuDefs[currentSetting];
+ auto &menuDef = settingMenuDefs[currentSettingIndex];
 
   switch (menuDef.selectType)
   {
@@ -194,7 +189,7 @@ void displaySetting(int invertLine) {
     {
       int settingIndex = *(int *)(menuDef.settingsValue);
       const char *settingValStr = menuDef.parameters.setListIndex.listPtr[settingIndex];
-      serialPrintf("%d %s\n", settingIndex, settingValStr);
+      // serialPrintf("%d %s\n", settingIndex, settingValStr);
       showText3(
           F("Setting"),
           F(menuDef.itemText),
@@ -224,10 +219,10 @@ void displaySetting(int invertLine) {
 
 void on_settingname_enter(void *)
 {
-  serialPrintf("Setting name: %d %d %s\n", currentSetting, settingMenuDefsSize, settingMenuDefs[currentSetting].itemText);
-  if (currentSetting >= settingMenuDefsSize)
+  // serialPrintf("Setting name: %d %d %s\n", currentSettingIndex, settingMenuDefsSize, settingMenuDefs[currentSettingIndex].itemText);
+  if (currentSettingIndex >= settingMenuDefsSize)
   {
-    currentSetting = 0;
+    currentSettingIndex = 0;
   }
   displaySetting(1);
 }
@@ -238,7 +233,7 @@ void on_settingvalue_enter(void *)
 }
 
 void nextSettingValue() {
-  auto &menuDef = settingMenuDefs[currentSetting];
+  auto &menuDef = settingMenuDefs[currentSettingIndex];
   switch(menuDef.selectType) {
     case menuSelectFromListIndex: 
     {
@@ -297,12 +292,12 @@ void on_settingname_update(void *ctx)
 {
   if (launchSwitch.rose())
   {
-    currentSetting++;
+    currentSettingIndex++;
     on_settingname_enter(ctx);
   }
   if (safetySwitch.rose())
   {
-    if (settingMenuDefs[currentSetting].selectType == menuCallMenu && settingMenuDefs[currentSetting].parameters.menu == 99)
+    if (settingMenuDefs[currentSettingIndex].selectType == menuCallMenu && settingMenuDefs[currentSettingIndex].parameters.menu == 99)
     {
       mainFsm.trigger(EXIT_SETTING);
     }
@@ -317,7 +312,7 @@ void on_settingvalue_update(void *ctx)
   if (launchSwitch.rose())
   {
     nextSettingValue();
-    //    pendingValues[currentSetting]++;
+    //    pendingValues[currentSettingIndex]++;
     on_settingvalue_enter(ctx);
   }
   if (safetySwitch.fell())
@@ -346,6 +341,11 @@ void on_standard_update(void *)
   }
 }
 
+void on_arming_enter(void*) {
+  centerText(F("Arming"));
+  armedLed.FadeOn(currentSettings.armingDelayMS).Repeat(1);
+}
+
 void on_armed_update(void *)
 {
   if (safetySwitch.rose())
@@ -368,9 +368,11 @@ void on_exit_setting(void *)
   {
     Serial.println("Updating values");
 
-    if(memcmp(&currentSetting, &prevSettings, sizeof(settings))!=0) {
+    if(memcmp(&currentSettings, &prevSettings, sizeof(settings))!=0) {
       i2ceeprom.write(0, (uint8_t*)&currentSettings, sizeof(settings));
     }
+
+    armedLed.MaxBrightness(currentSettings.maxBrightness);
   }
 }
 
@@ -382,6 +384,8 @@ State state_prearmed(on_prearm_enter, on_prearm, nullptr);
 State state_setting(on_setting_enter, on_standard_update, nullptr);
 State state_settingname(on_settingname_enter, on_settingname_update, nullptr);
 State state_settingvalue(on_settingvalue_enter, on_settingvalue_update, nullptr);
+
+State state_arming(on_arming_enter, on_standard_update, nullptr);
 
 State state_armed(on_armed_enter, on_armed_update, on_armed_exit);
 
@@ -431,7 +435,10 @@ void setup()
   mainFsm.add_transition(&state_idle, &state_prearmed, SAFETY_OFF, nullptr);
 
   mainFsm.add_timed_transition(&state_prearmed, &state_setting, &currentSettings.settingsDelayTimeMS, nullptr);
-  mainFsm.add_transition(&state_prearmed, &state_armed, ENTER_ARMED, nullptr);
+  mainFsm.add_transition(&state_prearmed, &state_arming, ENTER_ARMED, nullptr);
+
+  mainFsm.add_timed_transition(&state_arming, &state_armed, &currentSettings.armingDelayMS, nullptr);
+  mainFsm.add_transition(&state_arming, &state_idle, SAFETY_ON, nullptr);
 
   mainFsm.add_transition(&state_setting, &state_idle, SAFETY_ON, nullptr);
   mainFsm.add_transition(&state_setting, &state_settingname, LAUNCH_OFF, nullptr);

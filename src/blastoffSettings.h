@@ -14,6 +14,9 @@ struct settings {
   int valveTime;
   uint8_t countdownTime;
   int settingsDelayTimeMS;
+  uint8_t maxBrightness;
+  int armingDelayMS;
+  int breathDurationMS;
 };
 
 extern struct settings currentSettings;
