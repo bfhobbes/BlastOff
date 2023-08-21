@@ -5,7 +5,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#include <fsm.h>
+#include <Fsm.h>
 #include <Bounce2.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -27,7 +27,7 @@ enum Events {
   LAUNCH_DOWN,
   LAUNCH_UP,
   ENTER_SETTING,
-  ENTER_ARMED, 
+  ENTER_ARMED,
   LAUNCH
 };
 
@@ -122,7 +122,7 @@ Fsm mainFsm(&state_init);
 
 
 enum LightEvents {
-  LIGHT_OFF, 
+  LIGHT_OFF,
   LIGHT_ON,
   LIGHT_STROBE
 };
@@ -132,13 +132,13 @@ State light_on([]() {digitalWrite(ARMED_LIGHT, HIGH);}, nullptr, nullptr );
 Fsm lightFsm(&light_off);
 
 int strobeCount = 0;
-State light_strobe_on( 
-  []() {digitalWrite(ARMED_LIGHT, HIGH); --strobeCount; }, 
+State light_strobe_on(
+  []() {digitalWrite(ARMED_LIGHT, HIGH); --strobeCount; },
   nullptr,
   nullptr);
-State light_strobe_off( 
-  []() {digitalWrite(ARMED_LIGHT, LOW);}, 
-  []() { if(strobeCount<=0) {lightFsm.trigger(LIGHT_OFF);} }, 
+State light_strobe_off(
+  []() {digitalWrite(ARMED_LIGHT, LOW);},
+  []() { if(strobeCount<=0) {lightFsm.trigger(LIGHT_OFF);} },
   nullptr);
 
 
@@ -167,7 +167,7 @@ void on_idle_enter(void) {
 
 void on_armed_enter(void) {
   lightFsm.trigger(LIGHT_ON);
-  
+
   showText(F("armed"));
 }
 
@@ -228,7 +228,7 @@ void on_countdown_enter(void) {
 
 void on_countdown_update(void) {
   int countdown = 10000 + countdownStart - millis();
-  
+
   char buff[20];
   sprintf(buff, "%.2f", (float)countdown / 1000.0f);
 
@@ -263,7 +263,7 @@ void setup() {
   pinMode(FLASH_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(ARMED_LIGHT, OUTPUT);
-  
+
   safetySwitch.attach(ARMING_PIN, INPUT_PULLUP);
   safetySwitch.interval(25);
 
@@ -276,7 +276,7 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
-  
+
   lightFsm.add_transition(&light_off, &light_on, LIGHT_ON, nullptr);
   lightFsm.add_transition(&light_on, &light_off, LIGHT_OFF, nullptr);
 
@@ -296,10 +296,10 @@ void setup() {
   mainFsm.add_transition(&state_setting, &state_settingname, LAUNCH_UP, nullptr);
 
   mainFsm.add_transition(&state_settingname, &state_settingvalue, ARMING_UP, nullptr);
-  mainFsm.add_transition(&state_settingname, &state_settingname, LAUNCH_DOWN, []() { currentSetting++; } ); 
+  mainFsm.add_transition(&state_settingname, &state_settingname, LAUNCH_DOWN, []() { currentSetting++; } );
 
   mainFsm.add_transition(&state_settingvalue, &state_settingname, ARMING_DOWN, nullptr);
-  mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, []() { currentValue++; } ); 
+  mainFsm.add_transition(&state_settingvalue, &state_settingvalue, LAUNCH_DOWN, []() { currentValue++; } );
 
   mainFsm.add_transition(&state_countdown, &state_abort, ARMING_UP, []() { lightFsm.trigger(LIGHT_STROBE);});
   mainFsm.add_transition(&state_countdown, &state_launching, LAUNCH, nullptr);
@@ -313,10 +313,10 @@ void setup() {
   mainFsm.add_timed_transition(&state_launching, &state_postlaunch, 300, nullptr);
   mainFsm.add_transition(&state_postlaunch, &state_idle, ARMING_UP, nullptr);
 
-  
+
   // Show initial display buffer contents on the screen --
   // the library initializes this with an Adafruit splash screen.
-  
+
   display.display();
   delay(1000);
   display.clearDisplay();
@@ -335,7 +335,7 @@ void loop() {
   if(launchSwitch.fell()) {
     mainFsm.trigger(LAUNCH_DOWN);
   }
-  
+
   if(launchSwitch.rose()) {
     mainFsm.trigger(LAUNCH_UP);
   }
@@ -347,7 +347,7 @@ void loop() {
   if(safetySwitch.rose()) {
     mainFsm.trigger(ARMING_UP);
   }
-  
+
   // put your main code here, to run repeatedly:
 
   mainFsm.run_machine();
