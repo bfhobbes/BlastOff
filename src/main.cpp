@@ -122,7 +122,7 @@ void on_armed_enter(void *)
   if(currentSettings.mode == MODE_COUNTDOWN) {
     char buff[20];
     sprintf(buff, "%.2f", (float)currentSettings.countdownTime);
-    
+
     showCountdownText(F(buff), F("Ready to launch"));
   } else {
     centerText(F("Armed"));
@@ -235,14 +235,14 @@ void on_settingvalue_enter(void *)
 void nextSettingValue() {
   auto &menuDef = settingMenuDefs[currentSettingIndex];
   switch(menuDef.selectType) {
-    case menuSelectFromListIndex: 
+    case menuSelectFromListIndex:
     {
       int settingIndex = *(int *)(menuDef.settingsValue);
       ++settingIndex;
       if(settingIndex >= menuDef.parameters.setListIndex.listEntryCount) {
         settingIndex = 0;
       }
-      *(int*)(menuDef.settingsValue) = settingIndex;      
+      *(int*)(menuDef.settingsValue) = settingIndex;
       break;
     }
     case menuSelectFromIntList:
@@ -423,6 +423,7 @@ void setup()
   pinMode(FLASH_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(ARMED_LIGHT, OUTPUT);
+
 
   safetySwitch.attach(ARMING_PIN, INPUT_PULLUP);
   safetySwitch.interval(25);
