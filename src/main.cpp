@@ -398,7 +398,6 @@ State state_postlaunch(on_postlaunch_enter, on_standard_update, nullptr);
 
 void setup()
 {
-
   Serial.begin(9600);
 
   // Initialise eeprom for persistent configuration settings
