@@ -8,22 +8,26 @@
 
 #include <JLed_base.h>
 
+#include <Adafruit_EEPROM_I2C.h>
+
 #include "fsm.h"
 #include "blastoffSettings.h"
 #include "display.h"
 
-extern "C" {
-  #include <hardware/sync.h>
-  #include <hardware/flash.h>
-}
+// extern "C" {
+//   #include <hardware/sync.h>
+//   #include <hardware/flash.h>
+// }
+
+Adafruit_EEPROM_I2C i2ceeprom;
 
 // PICO_FLASH_SIZE_BYTES # Total size of RP2040 flash in bytes
 // FLASH_SECTOR_SIZE # The size of one sector ( minimum about you can erase )
 // FLASH_PAGE_SIZE# The size of one page ( minimum you can write )
 
 // Flash-based address of the last sector
-#define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
-#define MM_FLASH_ADDR = (XIP_BASE + FLASH_TARGET_OFFSET)
+// #define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - (2*FLASH_SECTOR_SIZE))
+// #define MM_FLASH_ADDR = (XIP_BASE + FLASH_TARGET_OFFSET)
 
 settings prevSettings;
 
@@ -379,11 +383,11 @@ void on_exit_setting(void *)
     Serial.println("Updating values");
 
     if(memcmp(&currentSettings, &prevSettings, sizeof(settings))!=0) {
-      uint32_t ints = save_and_disable_interrupts();
-      flash_range_program(FLASH_TARGET_OFFSET, (uint8_t *)&currentSettings, FLASH_PAGE_SIZE);
-      restore_interrupts(ints);
+      // uint32_t ints = save_and_disable_interrupts();
+      // flash_range_program(FLASH_TARGET_OFFSET, (uint8_t *)&currentSettings, 2*FLASH_PAGE_SIZE);
+      // restore_interrupts(ints);
 
-      // i2ceeprom.write(0, (uint8_t*)&currentSettings, sizeof(settings));
+      i2ceeprom.write(0, (uint8_t*)&currentSettings, sizeof(settings));
     }
 
     armedLed.MaxBrightness(currentSettings.maxBrightness);
@@ -415,23 +419,23 @@ void setup()
   Serial.begin(9600);
 
   // // Initialise eeprom for persistent configuration settings
-  // if (i2ceeprom.begin(0x50))
-  // { // you can stick the new i2c addr in here, e.g. begin(0x51);
-  //   Serial.println("Found I2C EEPROM");
-  // }
-  // else
-  // {
-  //   Serial.println("I2C EEPROM not identified ... check your connections?\r\n");
-  //   while (1)
-  //     delay(10);
-  // }
+  if (i2ceeprom.begin(0x50))
+  { // you can stick the new i2c addr in here, e.g. begin(0x51);
+    Serial.println("Found I2C EEPROM");
+  }
+  else
+  {
+    Serial.println("I2C EEPROM not identified ... check your connections?\r\n");
+    while (1)
+      delay(10);
+  }
 
   displayInit();
   // Read current values and transform any 255's into 0 as 255 is default state for eeprom.
 
   // Settings are written to the last available sector in the RP2040 flash where it's unlikely to be overwritten by the program upload
-  memcpy(&prevSettings, (void*)(XIP_BASE + FLASH_TARGET_OFFSET), sizeof(settings));
-  // i2ceeprom.read(0, (uint8_t*)&prevSettings, sizeof(settings));
+  // memcpy(&prevSettings, (void*)(XIP_BASE + FLASH_TARGET_OFFSET), sizeof(settings));
+  i2ceeprom.read(0, (uint8_t*)&prevSettings, sizeof(settings));
   if(prevSettings.magic == currentSettings.magic) {
     memcpy(&currentSettings, &prevSettings, sizeof(settings));
   }

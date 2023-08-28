@@ -12,9 +12,9 @@ struct settings {
   uint32_t magic;
   int mode;
   int valveTime;
-  uint8_t countdownTime;
+  int countdownTime;
   int settingsDelayTimeMS;
-  uint8_t maxBrightness;
+  int maxBrightness;
   int armingDelayMS;
   int breathDurationMS;
 };
